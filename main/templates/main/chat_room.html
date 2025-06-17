@@ -1,0 +1,143 @@
+{% extends 'main/base.html' %}
+
+{% block title %}Chat with {{ other_user.username }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">
+                    <i class="bi bi-person-circle"></i> {{ other_user.username }}
+                </h4>
+            </div>
+            <div class="card-body chat-container" id="chat-messages">
+                {% for message in messages %}
+                    <div class="message-wrapper {% if message.sender == user %}text-end{% endif %} mb-3">
+                        <div class="message {% if message.sender == user %}message-sent{% else %}message-received{% endif %}">
+                            <strong>{{ message.sender.username }}</strong>
+                            <p class="mb-1">{{ message.content }}</p>
+                            <small class="text-muted">{{ message.timestamp|date:"g:i A" }}</small>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+            <div class="card-footer">
+                <form id="chat-form">
+                    <div class="input-group">
+                        <input type="text" id="chat-message-input" class="form-control" 
+                               placeholder="Type your message..." autocomplete="off">
+                        <button class="btn btn-primary" type="submit">
+                            <i class="bi bi-send-fill"></i> Send
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{ room.id|json_script:"room-id" }}
+{{ user.id|json_script:"user-id" }}
+{{ user.username|json_script:"username" }}
+
+<style>
+.chat-container {
+    height: 500px;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+.message-wrapper {
+    display: flex;
+    margin-bottom: 10px;
+}
+
+.message-wrapper.text-end {
+    justify-content: flex-end;
+}
+
+.message {
+    max-width: 70%;
+    padding: 10px 15px;
+    border-radius: 10px;
+    word-wrap: break-word;
+}
+
+.message-sent {
+    background-color: #007bff;
+    color: white;
+}
+
+.message-received {
+    background-color: #f1f1f1;
+    color: #333;
+}
+
+.message p {
+    margin: 0;
+}
+</style>
+
+<script>
+    const roomId = JSON.parse(document.getElementById('room-id').textContent);
+    const userId = JSON.parse(document.getElementById('user-id').textContent);
+    const username = JSON.parse(document.getElementById('username').textContent);
+    
+    const chatSocket = new WebSocket(
+        'ws://' + window.location.host + '/ws/chat/' + roomId + '/'
+    );
+
+    chatSocket.onmessage = function(e) {
+        const data = JSON.parse(e.data);
+        const messageWrapper = document.createElement('div');
+        messageWrapper.className = 'message-wrapper mb-3';
+        
+        if (data.is_self) {
+            messageWrapper.classList.add('text-end');
+        }
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message ' + (data.is_self ? 'message-sent' : 'message-received');
+        
+        const now = new Date();
+        const time = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+        
+        messageDiv.innerHTML = `
+            <strong>${data.username}</strong>
+            <p class="mb-1">${data.message}</p>
+            <small class="text-muted">${time}</small>
+        `;
+        
+        messageWrapper.appendChild(messageDiv);
+        document.querySelector('#chat-messages').appendChild(messageWrapper);
+        
+        // Scroll to bottom
+        const chatContainer = document.querySelector('#chat-messages');
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    };
+
+    chatSocket.onclose = function(e) {
+        console.error('Chat socket closed unexpectedly');
+    };
+
+    document.querySelector('#chat-form').onsubmit = function(e) {
+        e.preventDefault();
+        const messageInputDom = document.querySelector('#chat-message-input');
+        const message = messageInputDom.value.trim();
+        
+        if (message) {
+            chatSocket.send(JSON.stringify({
+                'message': message
+            }));
+            messageInputDom.value = '';
+        }
+    };
+
+    // Auto-scroll to bottom on load
+    window.onload = function() {
+        const chatContainer = document.querySelector('#chat-messages');
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    };
+</script>
+{% endblock %}
