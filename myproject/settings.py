@@ -26,7 +26,7 @@ SECRET_KEY = "django-insecure-on5cf_pq89@0a+n8l-^bpi6qb3*6yq*y6y+!1k09v15d#h_17^
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,samweb.liara.run,.liara.run').split(',')
 
 
 # Application definition
