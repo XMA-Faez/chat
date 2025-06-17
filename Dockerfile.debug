@@ -1,0 +1,40 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV REDIS_HOST=localhost
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    gcc \
+    netcat-traditional \
+    redis-server \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt /app/
+RUN pip install --upgrade pip && pip install -r requirements.txt
+
+COPY . /app/
+RUN mkdir -p /app/staticfiles
+
+# Debug script with more error handling
+RUN echo '#!/bin/bash\n\
+set -e\n\
+echo "=== Starting Redis ==="\n\
+redis-server --daemonize yes\n\
+sleep 2\n\
+redis-cli ping || (echo "Redis failed to start" && exit 1)\n\
+echo "=== Running Migrations ==="\n\
+python manage.py migrate || (echo "Migrations failed" && exit 1)\n\
+echo "=== Collecting Static Files ==="\n\
+python manage.py collectstatic --noinput || (echo "Collectstatic failed" && exit 1)\n\
+echo "=== Creating Profiles ==="\n\
+python manage.py create_profiles || true\n\
+echo "=== Starting Django Server ==="\n\
+exec daphne -b 0.0.0.0 -p 8000 myproject.asgi:application' > /app/start-debug.sh
+
+RUN chmod +x /app/start-debug.sh
+
+EXPOSE 8000
+CMD ["/app/start-debug.sh"]

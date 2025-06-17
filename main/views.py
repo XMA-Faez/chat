@@ -125,3 +125,26 @@ def chat_room_view(request, room_id):
 def logout_view(request):
     logout(request)
     return redirect('login')
+
+
+@login_required
+def send_message_view(request, room_id):
+    """Fallback view for sending messages when WebSocket is not available"""
+    if request.method == 'POST':
+        room = get_object_or_404(ChatRoom, id=room_id)
+        
+        # Verify user is participant
+        if request.user not in room.participants.all():
+            return redirect('home')
+        
+        message_content = request.POST.get('message', '').strip()
+        if message_content:
+            Message.objects.create(
+                chat_room=room,
+                sender=request.user,
+                content=message_content
+            )
+        
+        return redirect('chat_room', room_id=room_id)
+    
+    return redirect('chat_room', room_id=room_id)

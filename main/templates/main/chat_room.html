@@ -23,10 +23,11 @@
                 {% endfor %}
             </div>
             <div class="card-footer">
-                <form id="chat-form">
+                <form id="chat-form" method="POST" action="{% url 'send_message' room.id %}">
+                    {% csrf_token %}
                     <div class="input-group">
-                        <input type="text" id="chat-message-input" class="form-control" 
-                               placeholder="Type your message..." autocomplete="off">
+                        <input type="text" id="chat-message-input" name="message" class="form-control" 
+                               placeholder="Type your message..." autocomplete="off" required>
                         <button class="btn btn-primary" type="submit">
                             <i class="bi bi-send-fill"></i> Send
                         </button>
@@ -84,8 +85,10 @@
     const userId = JSON.parse(document.getElementById('user-id').textContent);
     const username = JSON.parse(document.getElementById('username').textContent);
     
+    // Use wss:// for HTTPS, ws:// for HTTP
+    const wsScheme = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
     const chatSocket = new WebSocket(
-        'ws://' + window.location.host + '/ws/chat/' + roomId + '/'
+        wsScheme + window.location.host + '/ws/chat/' + roomId + '/'
     );
 
     chatSocket.onmessage = function(e) {
@@ -117,21 +120,43 @@
         chatContainer.scrollTop = chatContainer.scrollHeight;
     };
 
+    let useWebSocket = true;
+    
+    chatSocket.onopen = function(e) {
+        console.log('WebSocket connected');
+        useWebSocket = true;
+    };
+    
+    chatSocket.onerror = function(e) {
+        console.error('WebSocket error:', e);
+        useWebSocket = false;
+        const alertDiv = document.querySelector('.alert-warning');
+        if (!alertDiv) {
+            document.querySelector('#chat-form').insertAdjacentHTML('beforebegin', 
+                '<div class="alert alert-warning alert-dismissible fade show" role="alert">' +
+                'Real-time messaging unavailable. Messages will send but refresh to see new messages.' +
+                '<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>'
+            );
+        }
+    };
+    
     chatSocket.onclose = function(e) {
         console.error('Chat socket closed unexpectedly');
+        useWebSocket = false;
     };
-
+    
     document.querySelector('#chat-form').onsubmit = function(e) {
-        e.preventDefault();
         const messageInputDom = document.querySelector('#chat-message-input');
         const message = messageInputDom.value.trim();
         
-        if (message) {
+        if (message && useWebSocket && chatSocket.readyState === WebSocket.OPEN) {
+            e.preventDefault();
             chatSocket.send(JSON.stringify({
                 'message': message
             }));
             messageInputDom.value = '';
         }
+        // If WebSocket is not available, let the form submit normally
     };
 
     // Auto-scroll to bottom on load
@@ -139,5 +164,14 @@
         const chatContainer = document.querySelector('#chat-messages');
         chatContainer.scrollTop = chatContainer.scrollHeight;
     };
+    
+    // Optional: Auto-refresh every 10 seconds if WebSocket fails
+    setTimeout(function() {
+        if (!useWebSocket) {
+            setInterval(function() {
+                window.location.reload();
+            }, 10000);
+        }
+    }, 3000);
 </script>
 {% endblock %}

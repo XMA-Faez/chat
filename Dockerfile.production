@@ -1,0 +1,50 @@
+FROM python:3.11-slim
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV REDIS_HOST=localhost
+
+# Set work directory
+WORKDIR /app
+
+# Install system dependencies including Redis
+RUN apt-get update && apt-get install -y \
+    gcc \
+    netcat-traditional \
+    redis-server \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt /app/
+RUN pip install --upgrade pip && pip install -r requirements.txt
+
+# Copy project
+COPY . /app/
+
+# Create directory for static files
+RUN mkdir -p /app/staticfiles
+
+# Run migrations and collect static files during build
+RUN redis-server --daemonize yes && \
+    sleep 2 && \
+    python manage.py migrate && \
+    python manage.py collectstatic --noinput && \
+    python manage.py create_profiles || true && \
+    redis-cli shutdown
+
+# Create a simple startup script that doesn't re-run migrations
+RUN echo '#!/bin/bash\n\
+echo "Starting Redis..."\n\
+redis-server --daemonize yes\n\
+sleep 2\n\
+echo "Redis started. Starting Django server..."\n\
+exec daphne -b 0.0.0.0 -p 8000 myproject.asgi:application' > /app/start-prod.sh
+
+RUN chmod +x /app/start-prod.sh
+
+# Expose port
+EXPOSE 8000
+
+# Use exec to ensure proper signal handling
+CMD ["/app/start-prod.sh"]
