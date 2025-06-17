@@ -28,6 +28,14 @@ DEBUG = True
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,samweb.liara.run,.liara.run').split(',')
 
+# CSRF Trusted Origins for Django 4.0+
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+    'https://samweb.liara.run',
+    'https://*.liara.run'
+]
+
 
 # Application definition
 
@@ -135,6 +143,12 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
+
+# Security settings for HTTPS
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
